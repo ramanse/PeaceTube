@@ -1,0 +1,3 @@
+[submodule "project/sdk"]
+	path = project/sdk
+	url = ../sdk.git
