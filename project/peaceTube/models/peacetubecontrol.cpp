@@ -6,33 +6,60 @@ PeaceTubeControl::PeaceTubeControl(QQuickItem *parent) : QQuickWebView(parent)
     m_resultListModel = new ResultListModel();
     m_networkManger = new QNetworkAccessManager(this);
     if (m_networkManger) {
+        connect(this, &PeaceTubeControl::composedTextChanged, [=] () {
+            //HTTP Request
+            if (m_networkManger) {
+                if (m_searchResultList.count() > 0) {
+                    m_searchResultList = QJsonArray();
+                }
+                if (m_composedText != "") {
+                    QUrl url("https://www.googleapis.com/youtube/v3/search");
+                    QUrlQuery query;
+                    query.addQueryItem("part", "snippet");
+                    query.addQueryItem("maxResults", "100");
+                    query.addQueryItem("type","video");
+                    query.addQueryItem("key","AIzaSyDDUomWkvfjCUeR21E9mxK8qOfYTJddVAo");
+                    query.addQueryItem("videoEmbeddable","true");
+                    query.addQueryItem("q",m_composedText);
+                    url.setQuery(query.query());
+
+                    QNetworkRequest request(url);
+                    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/x-www-form-urlencoded");
+                    request.setAttribute(QNetworkRequest::User, QVariant(EnQuery::QUERY_SEARCH));
+                    m_networkManger->get(request);
+                }
+            }
+        });
         connect(this, &PeaceTubeControl::searchTextChanged, [=] () {
             //HTTP Request
             if (m_networkManger) {
                 if (m_resultListModel && m_resultListModel->count() > 0) {
                     m_resultListModel->resetModel();
                 }
-                QUrl url("https://www.googleapis.com/youtube/v3/search");
-                QUrlQuery query;
+                //https://clients1.google.com/complete/search?client=youtube&gs_ri=youtube&ds=yt&q=faded
 
-                query.addQueryItem("part", "snippet");
-                query.addQueryItem("maxResults", "5");
-                query.addQueryItem("type","video");
-                query.addQueryItem("key","AIzaSyDDUomWkvfjCUeR21E9mxK8qOfYTJddVAo");
-                query.addQueryItem("videoEmbeddable","true");
+                QUrl url("https://clients1.google.com/complete/search");
+                QUrlQuery query;
+                query.addQueryItem("client", "youtube");
+                query.addQueryItem("gs_ri", "youtube");
+                query.addQueryItem("ds","yt");
                 query.addQueryItem("q",m_searchText);
+
                 url.setQuery(query.query());
 
                 QNetworkRequest request(url);
                 qCritical()<<"URL is "<<url;
                 request.setHeader(QNetworkRequest::ContentTypeHeader, "application/x-www-form-urlencoded");
-                request.setAttribute(QNetworkRequest::User, QVariant(EnQuery::QUERY_SEARCH));
+                request.setAttribute(QNetworkRequest::User, QVariant(EnQuery::QUERY_PREDICTION));
                 m_networkManger->get(request);
             }
         });
         connect(m_networkManger, &QNetworkAccessManager::finished, [=](QNetworkReply* reply) {
             replyFinished(reply);
 
+        });
+        connect(m_resultListModel, &ResultListModel::partialListUpdated, [=]() {
+            emit resultListModelChanged();
         });
     }
 }
@@ -47,6 +74,23 @@ ResultListModel *PeaceTubeControl::resultListModel() const
     return m_resultListModel;
 }
 
+QJsonArray PeaceTubeControl::searchResultList()
+{
+    return m_searchResultList;
+}
+
+QString PeaceTubeControl::predictionsList()
+{
+    return m_predictionsList;
+}
+
+void PeaceTubeControl::resetResultList()
+{
+    if (m_resultListModel && m_resultListModel->count() > 0) {
+        m_resultListModel->resetModel();
+    }
+}
+
 void PeaceTubeControl::replyFinished(QNetworkReply *reply)
 {
     if (reply->error() == QNetworkReply::ServiceUnavailableError) {
@@ -56,13 +100,24 @@ void PeaceTubeControl::replyFinished(QNetworkReply *reply)
 
         auto requestType = reply->request().attribute(QNetworkRequest::User).toInt();
         switch (requestType) {
+        case EnQuery::QUERY_PREDICTION: {
+            QString strReply = static_cast<QString>(reply->readAll());
+            QJsonDocument jsonResponse = QJsonDocument::fromJson(strReply.toUtf8());
+            m_predictionsList = strReply;
+            emit predictionsListChanged();
+            //m_resultListModel->updateResultModel(resultJArray);
+            //emit resultListModelChanged();
+            //prepareVideoIdsRequest(resultJArray);
+        }
         case EnQuery::QUERY_SEARCH: {
             qCritical()<<"Received Query search here";
             QString strReply = static_cast<QString>(reply->readAll());
             QJsonDocument jsonResponse = QJsonDocument::fromJson(strReply.toUtf8());
-            auto resultJArray = jsonResponse.object().value("items").toArray();
-            m_resultListModel->updateResultModel(resultJArray);
-            prepareVideoIdsRequest(resultJArray);
+            m_searchResultList = jsonResponse.object().value("items").toArray();
+            emit searchResultListChanged();
+            //m_resultListModel->updateResultModel(resultJArray);
+            //emit resultListModelChanged();
+            //prepareVideoIdsRequest(resultJArray);
         }
             break;
         case EnQuery::QUERY_VIDEOS: {
@@ -182,6 +237,9 @@ void ResultListModel::addResult(ResultObject *mObject){
     QQmlEngine::setObjectOwnership(mObject,  QQmlEngine::CppOwnership);
     mObject->setParent(this);
     m_inventoryObjs[mObject->videoId()] = mObject;
+    if (rowCount() >= 10) {
+        emit partialListUpdated();
+    }
     endInsertRows();
 }
 

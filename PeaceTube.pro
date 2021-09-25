@@ -15,6 +15,10 @@ DEFINES += QT_DEPRECATED_WARNINGS
 !include( project/peaceTube/peaceTube.pri ) {
     error( "Couldn't include peaceTube pri file!" )
 }
+!include( project/sdk/sdk.pri ) {
+    error( "Couldn't include sdk pri file!" )
+}
+
 
 
 # Additional import path used to resolve QML modules in Qt Creator's code model

@@ -42,6 +42,7 @@ signals:
     void previewChanged();
     void videoIdChanged();
     void durationChanged();
+
 private:
     QString m_name;
     QString m_description;
@@ -79,6 +80,7 @@ public:
     void updateVideoDetails(const QJsonArray &array);
 signals:
     void countChanged();
+    void partialListUpdated();
 
 protected:
     QHash<int, QByteArray> roleNames() const override;
@@ -94,28 +96,40 @@ class PeaceTubeControl : public QQuickWebView
 {
     Q_OBJECT
 
+    Q_PROPERTY(QString composedText MEMBER m_composedText NOTIFY composedTextChanged)
     Q_PROPERTY(QString searchText MEMBER m_searchText NOTIFY searchTextChanged)
     Q_PROPERTY(bool isAuthorized READ isAuthorized NOTIFY isAuthorizedChanged)
     Q_PROPERTY(ResultListModel *resultListModel READ resultListModel NOTIFY resultListModelChanged)
+    Q_PROPERTY(QJsonArray searchResultList READ searchResultList NOTIFY searchResultListChanged)
+    Q_PROPERTY(QString predictionsList READ predictionsList NOTIFY predictionsListChanged)
 
 public:
     PeaceTubeControl(QQuickItem *parent = 0);
     bool isAuthorized() const;
     ResultListModel *resultListModel() const;
+    QJsonArray searchResultList();
+    QString predictionsList();
+    Q_INVOKABLE void resetResultList();
 signals:
+    void composedTextChanged();
     void searchTextChanged();
     void isAuthorizedChanged();
     void resultListModelChanged();
-
+    void searchResultListChanged();
+    void predictionsListChanged();
 private:
     enum EnQuery
     {
+        QUERY_PREDICTION,
         QUERY_SEARCH,
         QUERY_VIDEOS
     };
     QString m_searchText{""};
+    QString m_composedText{""};
     bool m_isAuthorized{true}; //until oAuth is implemented
     ResultListModel *m_resultListModel;
+    QJsonArray m_searchResultList;
+    QString m_predictionsList;
 
     //For http queries
     QNetworkAccessManager *m_networkManger;
